@@ -1,11 +1,14 @@
-import React from "react";
+import Dashboard from '@/components/Dashboard'
 
-const Dashboard = ()=>{
-    return(
-        <div>
-            dashboard
-        </div>
+const DashboardPage = () => {
+    return (
+        <Dashboard/>
     )
 }
 
-export default Dashboard
+export default DashboardPage
+
+export const metadata = {
+    title: "Dashboard - Uddan",
+  }
+   
