@@ -12,6 +12,7 @@
     "mongoose": "^9.11.4",
     "next": "16.4.3",
     "next-auth": "^4.24.15",
+    "razorpay": "^2.9.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-toastify": "^11.2.0"

@@ -1,11 +1,31 @@
-"use client"
-export default async function Username({ params }) {
-  // Await the params promise
-  const resolvedParams = await params;
-  
+import React from 'react'
+import PaymentPage from '@/components/PaymentPage'
+import { notFound } from "next/navigation"
+import connectDb from '@/db/connectDb'
+import User from '@/models/User'
+
+const Username = async ({ params }) => {
+  // if username is not present then show a error page(404)
+  const checkUser = async () => {
+    await connectDb()
+    let u = await User.findOne({ username: params.username })
+    if (!u) {
+      return notFound()
+    }
+  }
+  await checkUser()
+
   return (
-    <div className="text-white">
-      {resolvedParams.username}
-    </div>
-  );
+    <>
+      <PaymentPage username={params.username} />
+    </>
+  )
+}
+
+export default Username
+ 
+export async function generateMetadata({ params }) {
+  return {
+    title: `Support ${params.username} - Uddan`,
+  }
 }
