@@ -1,13 +1,14 @@
 "use server"
 
-import Razorpay from "razorpay"                                                                                                                                          
+import Razorpay from "razorpay"
 import Payment from "@/models/Payment"
 import connectDb from "@/db/connectDb"
 import User from "@/models/User"
+import Username from "@/app/[username]/page"
 
-export const initiate = async (amount, to_username, paymentform) =>{
+export const initiate = async (amount, to_username, paymentform) => {
     await connectDb()
-    var instance = new Razorpay({ key_id: process.env.NEXT_PUBLIC_KEY_ID, key_secret: process.env.KEY_SECRET})
+    var instance = new Razorpay({ key_id: process.env.NEXT_PUBLIC_KEY_ID, key_secret: process.env.KEY_SECRET })
 
     let options = {
         amount: Number.parseInt(amount),
@@ -17,8 +18,22 @@ export const initiate = async (amount, to_username, paymentform) =>{
     let x = await instance.orders.create(options)
 
     //payment object which shows a peding payment in the database
-    await Payment.create({oid: x.id, amount: amount, to_user: to_username, name: paymentform.name, message: paymentform.message})
+    await Payment.create({ oid: x.id, amount: amount, to_user: to_username, name: paymentform.name, message: paymentform.message })
 
     return x
 
+}
+
+export const fetchuser = async (username) => {
+    await connectDb()
+    let u = await User.findOne({ username: username })
+    let user = u.toObject({ flattenObjectIds: true })
+    return user
+}
+
+export const fetchpayments = async (username) => {
+    await connectDb()
+    //decreasing order of amount
+    let p = await Payment.find({ to_user: username, done:true }).sort({ amount: -1 }).limit(10).lean()
+    return p
 }
