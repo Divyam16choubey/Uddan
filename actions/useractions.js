@@ -17,7 +17,7 @@ export const initiate = async (amount, to_username, paymentform) =>{
     let x = await instance.orders.create(options)
 
     //payment object which shows a peding payment in the database
-    await Payment.create({oid: x.id, amount: amount, to_username: to_username, name: paymentform.name, message: paymentform.message})
+    await Payment.create({oid: x.id, amount: amount, to_user: to_username, name: paymentform.name, message: paymentform.message})
 
     return x
 
