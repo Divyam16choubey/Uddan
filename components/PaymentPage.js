@@ -22,7 +22,7 @@ const PaymentPage = ({ username }) => {
 
     useEffect(() => {
         if (searchParams.get("paymentdone") == "true") {
-            toast('Thanks for your donation!', {
+            toast('Thanks for your contribution!', {
                 position: "top-right",
                 autoClose: 5000,
                 hideProgressBar: false,
