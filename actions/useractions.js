@@ -37,3 +37,16 @@ export const fetchpayments = async (username) => {
     let p = await Payment.find({ to_user: username, done:true }).sort({ amount: -1 }).limit(10).lean()
     return p
 }
+
+export const updateProfile = async (DataTransfer, oldusername) => {
+    await connectDb()
+
+    let ndata = Object .fromEntries(data)
+    if(oldusername !== ndata.username){
+        let u = await User.findOne({username: oldusername})
+        if(u){
+            return {error: "Username is not available"}
+        }
+    }
+    await User.updateOne({email: ndata.email}, ndata)
+}
