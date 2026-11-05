@@ -1,40 +1,67 @@
-import mongoose from 'mongoose';
 import NextAuth from 'next-auth'
 import GitHubProvider from "next-auth/providers/github";
 import User from '@/models/User';
-import Payment from '@/models/Payment';
 import connectDb from '@/db/connectDb';
 
-export const authoptions = NextAuth({
+export const authOptions = {
   providers: [
-    // OAuth authentication providers...
-    //now only implemented for github login
     GitHubProvider({
       clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET
+      clientSecret: process.env.GITHUB_SECRET,
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile, email, credentials }) {
-      if (account.provider == 'github') {
-        //check if user already exists in the database
-        const currentUser = await User.findOne({ email: email })
-        if (!currentUser) {
-          //Create a new user
-          const newUser = new User({
-            email: email,
-            username: email.split("@")[0],
-          })
+    async signIn({ user, account }) {
+      if (account.provider === 'github') {
+        // user.email is the correct property — the `email` callback param is
+        // something different (used for passwordless flows).
+        const userEmail = user.email;
+        if (!userEmail) {
+          // GitHub account has no public email — deny sign-in
+          return false;
         }
-        return true
-      }
-    },
-    async session({ session, user, token }) {
-      const dbUser = await User.findOne({ email: session.user.email })
-      session.user.name = dbUser.username
-      return session
-    },
-  }
-})
 
-export { authoptions as GET, authoptions as POST }
+        try {
+          await connectDb();
+
+          const existingUser = await User.findOne({ email: userEmail });
+          if (!existingUser) {
+            // Create and persist the new user
+            await User.create({
+              email: userEmail,
+              username: userEmail.split('@')[0],
+              name: user.name || '',
+              profilepic: user.image || '',
+            });
+          }
+        } catch (err) {
+          console.error('signIn DB error:', err);
+          return false;
+        }
+
+        return true;
+      }
+      return false;
+    },
+
+    async session({ session }) {
+      // Attach the stored username to the session so the rest of the app can
+      // use session.user.name as the username identifier.
+      try {
+        await connectDb();
+        const dbUser = await User.findOne({ email: session.user.email });
+        if (dbUser) {
+          session.user.name = dbUser.username;
+        }
+        // If dbUser is null the session is still returned intact — the user
+        // will just not have an overridden name.
+      } catch (err) {
+        console.error('session DB error:', err);
+      }
+      return session;
+    },
+  },
+};
+
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };

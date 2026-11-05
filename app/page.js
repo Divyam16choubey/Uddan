@@ -4,8 +4,8 @@ import Link from "next/link";
 export default function Home() {
   return (
     <>
-      <div className="flex flex-col justify-center items-center text-white h-[44vh] gap-4 px-5 md:px-0 text-xs md:text-base">
-        <div className="font-bold flex gap-6 md:gap-20 md:text-5xl justify-center items-center text-3xl">Uddan <span><img src="/uddan.gif" width={80} alt="" /></span></div>
+      <div className="flex flex-col justify-center items-center text-white py-12 md:py-16 gap-4 px-5 md:px-0 text-xs md:text-base">
+        <div className="font-bold flex gap-6 md:gap-2 md:text-5xl justify-center items-center text-3xl">Uddan <span><img src="/uddan.gif" width={80} alt="" /></span></div>
         <p className="text-center md:text-left">A crowdfunding platform connecting aspiring founders with supporters to turn their ideas into reality. Start Now!</p>
         <div>
           <Link href={"/login"}>
@@ -19,7 +19,7 @@ export default function Home() {
       </div>
       <div className="bg-white h-1 opacity-10"></div>
 
-      <div className="text-white container mx-auto pb-20 pt-14 px-10">
+      <div className="text-white container mx-auto pb-14 pt-8 px-10">
         <h2 className="text-3xl font-bold text-center mb-14">Turn your vision into reality with the support of your community.</h2>
         <div className="flex gap-5 justify-around">
           <div className="item space-y-3 flex flex-col items-center justify-center">

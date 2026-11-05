@@ -4,57 +4,134 @@ import Razorpay from "razorpay"
 import Payment from "@/models/Payment"
 import connectDb from "@/db/connectDb"
 import User from "@/models/User"
-import Username from "@/app/[username]/page"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
+// ---------------------------------------------------------------------------
+// initiate — create a Razorpay order for a payment to `to_username`
+// ---------------------------------------------------------------------------
 export const initiate = async (amount, to_username, paymentform) => {
     await connectDb()
-    //fetch the razorpay secret from database
-    let user = await User.findOne({username: to_username})
-    const secret = user.razorpaysecret
-    var instance = new Razorpay({ key_id: user.razorpayid, key_secret: secret })
 
-    let options = {
+    // Fetch the creator's Razorpay credentials from the database
+    const user = await User.findOne({ username: to_username })
+    if (!user) {
+        throw new Error("User not found")
+    }
+
+    const instance = new Razorpay({
+        key_id: user.razorpayid,
+        key_secret: user.razorpaysecret,
+    })
+
+    const options = {
         amount: Number.parseInt(amount),
         currency: "INR",
     }
 
-    let x = await instance.orders.create(options)
+    const order = await instance.orders.create(options)
 
-    //payment object which shows a peding payment in the database
-    await Payment.create({ oid: x.id, amount: amount/100, to_user: to_username, name: paymentform.name, message: paymentform.message })
+    // Record the pending payment in the database
+    await Payment.create({
+        oid: order.id,
+        amount: amount / 100,
+        to_user: to_username,
+        name: paymentform.name,
+        message: paymentform.message,
+    })
 
-    return x
-
+    return order
 }
 
+// ---------------------------------------------------------------------------
+// fetchuser — return public profile data (razorpaysecret excluded)
+// ---------------------------------------------------------------------------
 export const fetchuser = async (username) => {
     await connectDb()
-    let u = await User.findOne({ username: username })
-    let user = u.toObject({ flattenObjectIds: true })
-    return user
+    const user = await User.findOne({ username })
+        .select("-razorpaysecret")
+        .lean()
+
+    if (!user) {
+        return null
+    }
+
+    // Convert ObjectId fields to plain strings
+    return JSON.parse(JSON.stringify(user))
 }
 
+// ---------------------------------------------------------------------------
+// fetchpayments — return top-10 completed payments for a creator
+// ---------------------------------------------------------------------------
 export const fetchpayments = async (username) => {
     await connectDb()
-    //decreasing order of amount
-    let p = await Payment.find({ to_user: username, done:true }).sort({ amount: -1 }).limit(10).lean()
-    return p
+    const payments = await Payment.find({ to_user: username, done: true })
+        .sort({ amount: -1 })
+        .limit(10)
+        .lean()
+
+    return JSON.parse(JSON.stringify(payments))
 }
 
-export const updateProfile = async (DataTransfer, oldusername) => {
+// ---------------------------------------------------------------------------
+// updateProfile — update the currently authenticated user's profile
+//
+// Security:
+//   - Identity is established via getServerSession — never from client input.
+//   - Only whitelisted fields are applied to the DB update.
+//   - razorpaysecret is accepted so the user can configure it, but it is
+//     never returned to the client (fetchuser always excludes it).
+// ---------------------------------------------------------------------------
+export const updateProfile = async (formData, oldUsername) => {
+    // 1. Verify the caller is authenticated
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user?.email) {
+        return { error: "Unauthorised" }
+    }
+
     await connectDb()
 
-    let ndata = Object .fromEntries(data)
-    if(oldusername !== ndata.username){
-        let u = await User.findOne({username: ndata.username})
-        if(u){
-            return {error: "Username is not available"}
+    // 2. Confirm the old username belongs to the authenticated user
+    const sessionUser = await User.findOne({ email: session.user.email })
+    if (!sessionUser) {
+        return { error: "User not found" }
+    }
+    if (sessionUser.username !== oldUsername) {
+        return { error: "Unauthorised" }
+    }
+
+    // 3. Extract only the whitelisted fields from the submitted form data
+    const ALLOWED_FIELDS = [
+        "name",
+        "username",
+        "profilepic",
+        "coverpic",
+        "razorpayid",
+        "razorpaysecret",
+    ]
+
+    const updates = {}
+    for (const field of ALLOWED_FIELDS) {
+        const value = formData.get(field)
+        if (value !== null) {
+            updates[field] = value
         }
-        await User.updateOne({email: ndata.email}, ndata)
-        //update payments on new username 
-        await Payment.updateMany({to_user: oldusername}, {to_user: ndata.username})
     }
-    else{
-        await User.updateOne({email: ndata.email}, ndata)
+
+    // 4. If username is changing, make sure it is available
+    const newUsername = updates.username
+    if (newUsername && newUsername !== oldUsername) {
+        const taken = await User.findOne({ username: newUsername })
+        if (taken) {
+            return { error: "Username is not available" }
+        }
+
+        // Apply the update and cascade to payments
+        await User.updateOne({ email: session.user.email }, updates)
+        await Payment.updateMany({ to_user: oldUsername }, { to_user: newUsername })
+    } else {
+        await User.updateOne({ email: session.user.email }, updates)
     }
+
+    return { success: true }
 }
