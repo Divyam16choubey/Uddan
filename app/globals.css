@@ -6,6 +6,15 @@
     filter: none;
 }
 
+/* ── Coin GIF blend fix ───────────────────────────────────────────────────── */
+/* coin.gif uses black (index 0) as its transparent colour.  On a dark        */
+/* background the browser composites those pixels as dark rectangles between   */
+/* animation frames.  screen blend-mode makes black pixels visually            */
+/* transparent on any dark background without touching the image file.         */
+.coin-gif {
+    mix-blend-mode: screen;
+}
+
 /* ── Focus ring polish ────────────────────────────────────────────────────── */
 /* Global smooth scroll for anchor navigation */
 html {

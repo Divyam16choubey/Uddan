@@ -144,7 +144,7 @@ const PaymentPage = ({ username }) => {
             </div>
 
             {/* ── Two-column layout ────────────────────────────────── */}
-            <div className="flex flex-col md:flex-row gap-4 w-full max-w-5xl mx-auto px-4 pb-16">
+            <div className="flex flex-col md:flex-row md:items-start gap-4 w-full max-w-5xl mx-auto px-4 pb-16">
 
                 {/* Supporters leaderboard */}
                 <div className="w-full md:w-1/2 bg-white/5 border border-white/10 rounded-2xl p-6">

@@ -48,7 +48,7 @@ const About = () => {
                     </div>
                     <div className="flex items-start gap-4">
                         <div className="bg-blue-900/60 rounded-full p-2.5 shrink-0">
-                            <img className="w-10 h-10" src="/coin.gif" alt="Financial Support" />
+                            <img className="w-10 h-10 coin-gif" src="/coin.gif" alt="Financial Support" />
                         </div>
                         <div>
                             <h3 className="font-semibold text-white text-base mb-1">Receive Support</h3>

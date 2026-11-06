@@ -65,7 +65,7 @@ export default function Home() {
           {/* Card 2 */}
           <div className="flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
             <div className="bg-blue-900/60 rounded-full p-3">
-              <img width={56} height={56} src="/coin.gif" alt="Funding" />
+              <img width={56} height={56} src="/coin.gif" alt="Funding" className="coin-gif" />
             </div>
             <div>
               <p className="font-semibold text-base mb-1">Direct Funding</p>
