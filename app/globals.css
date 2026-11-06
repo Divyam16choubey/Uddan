@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
-.invertImg{
-    filter: none
+/* ── Logo filter ──────────────────────────────────────────────────────────── */
+/* Set to none — the GIF is displayed with its original colors in the navbar.  */
+.invertImg {
+    filter: none;
+}
+
+/* ── Focus ring polish ────────────────────────────────────────────────────── */
+/* Global smooth scroll for anchor navigation */
+html {
+    scroll-behavior: smooth;
 }

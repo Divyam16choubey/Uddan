@@ -1,59 +1,118 @@
-import Image from "next/image";
 import Link from "next/link";
 
 export default function Home() {
   return (
     <>
-      <div className="flex flex-col justify-center items-center text-white py-12 md:py-16 gap-4 px-5 md:px-0 text-xs md:text-base">
-        <div className="font-bold flex gap-6 md:gap-2 md:text-5xl justify-center items-center text-3xl">Uddan <span><img src="/uddan.gif" width={80} alt="" /></span></div>
-        <p className="text-center md:text-left">A crowdfunding platform connecting aspiring founders with supporters to turn their ideas into reality. Start Now!</p>
-        <div>
-          <Link href={"/login"}>
-            <button type="button" className="text-white bg-gradient-to-br from-purple-600 to-blue-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2">Start Here</button>
-          </Link>
+      {/* ── Hero ───────────────────────────────────────────────────────── */}
+      <section className="flex flex-col justify-center items-center text-white py-16 md:py-24 gap-5 px-6 md:px-0">
+        <div className="flex items-center gap-3 md:gap-4">
+          <img src="/uddan.gif" width={72} height={72} alt="Uddan logo" />
+          <h1 className="font-extrabold text-4xl md:text-6xl tracking-tight">Uddan</h1>
+        </div>
 
-          <Link href={"/about"}>
-            <button type="button" className="text-white bg-gradient-to-br from-purple-600 to-blue-500 hover:bg-gradient-to-bl focus:ring-4 focus:outline-none focus:ring-blue-300 dark:focus:ring-blue-800 font-medium rounded-lg text-sm px-4 py-2.5 text-center me-2 mb-2">Read More</button>
+        <p className="text-base md:text-xl text-slate-300 text-center max-w-xl leading-relaxed">
+          A crowdfunding platform connecting aspiring founders with supporters
+          to turn their ideas into reality.
+        </p>
+
+        <div className="flex gap-3 flex-wrap justify-center mt-2">
+          <Link href="/login">
+            <button
+              type="button"
+              className="bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 transition-all text-white font-semibold rounded-lg px-7 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              Get Started
+            </button>
+          </Link>
+          <Link href="/about">
+            <button
+              type="button"
+              className="border border-slate-600 hover:border-slate-400 hover:bg-white/5 transition-all text-white font-semibold rounded-lg px-7 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              Learn More
+            </button>
           </Link>
         </div>
-      </div>
-      <div className="bg-white h-1 opacity-10"></div>
+      </section>
 
-      <div className="text-white container mx-auto pb-14 pt-8 px-10">
-        <h2 className="text-3xl font-bold text-center mb-14">Turn your vision into reality with the support of your community.</h2>
-        <div className="flex gap-5 justify-around">
-          <div className="item space-y-3 flex flex-col items-center justify-center">
-            <img className="bg-slate-400 rounded-full p-2 text-black" width={80} src="/man.gif" alt="man" />
-            <p className="font-bold text-center">Your Community Supports You</p>
-            <p className="text-center">Let your supporters contribute and help turn your ideas into reality.</p>
+      {/* ── Divider ────────────────────────────────────────────────────── */}
+      <div className="bg-white h-px opacity-10 mx-6" />
+
+      {/* ── Features ───────────────────────────────────────────────────── */}
+      <section className="text-white container mx-auto py-16 px-6 md:px-10">
+        <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+          Turn your vision into reality
+        </h2>
+        <p className="text-slate-400 text-center mb-12 max-w-lg mx-auto">
+          With the support of your community, anything is possible.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+          {/* Card 1 */}
+          <div className="flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
+            <div className="bg-blue-900/60 rounded-full p-3">
+              <img width={56} height={56} src="/man.gif" alt="Community" />
+            </div>
+            <div>
+              <p className="font-semibold text-base mb-1">Community Support</p>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Share your vision and let your supporters rally around your
+                goals. Real people, real backing.
+              </p>
+            </div>
           </div>
-          <div className="item space-y-3 flex flex-col items-center justify-center">
-            <img className="bg-slate-400 rounded-full p-2 text-black" width={80} src="/coin.gif" alt="coin" />
-            <p className="font-bold text-center">Your Community Supports You</p>
-            <p className="text-center">Let your supporters contribute and help turn your ideas into reality.</p>
+
+          {/* Card 2 */}
+          <div className="flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
+            <div className="bg-blue-900/60 rounded-full p-3">
+              <img width={56} height={56} src="/coin.gif" alt="Funding" />
+            </div>
+            <div>
+              <p className="font-semibold text-base mb-1">Direct Funding</p>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Receive contributions directly to your Razorpay account —
+                no middlemen, no delays.
+              </p>
+            </div>
           </div>
-          <div className="item space-y-3 flex flex-col items-center justify-center">
-            <img className="bg-slate-400 rounded-full p-2 text-black" width={80} src="/group.gif" alt="group" />
-            <p className="font-bold text-center">Your Community Supports You</p>
-            <p className="text-center">Let your supporters contribute and help turn your ideas into reality.</p>
+
+          {/* Card 3 */}
+          <div className="flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
+            <div className="bg-blue-900/60 rounded-full p-3">
+              <img width={56} height={56} src="/group.gif" alt="Network" />
+            </div>
+            <div>
+              <p className="font-semibold text-base mb-1">Grow Together</p>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Build a network of believers. Every contribution strengthens
+                the community around your idea.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="bg-white h-1 opacity-10"></div>
+      {/* ── Divider ────────────────────────────────────────────────────── */}
+      <div className="bg-white h-px opacity-10 mx-6" />
 
-      <div className="text-white container mx-auto pb-20 pt-14 flex flex-col items-center justify-center">
-        <h2 className="text-3xl font-bold text-center mb-14">Learn more about us</h2>
-        <div className="w-[90%] h-[40vh] md:w-[50%] md:h-[40vh] lg:w-[50%] lg:h-[40vh] xl:w-[50%] xl:h-[40vh]">
+      {/* ── Video ──────────────────────────────────────────────────────── */}
+      <section className="text-white container mx-auto py-16 px-6 flex flex-col items-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+          See how it works
+        </h2>
+        <p className="text-slate-400 text-center mb-10 max-w-lg mx-auto">
+          Watch a quick overview of what Uddan can do for you.
+        </p>
+        <div className="w-full max-w-2xl aspect-video rounded-2xl overflow-hidden shadow-lg shadow-blue-950/50">
           <iframe
-            className="w-full h-full border-0 rounded-xl"
+            className="w-full h-full border-0"
             src="https://www.youtube.com/embed/8-EyxMuvE9A"
-            title="Uddan - Learn More About Crowdfunding"
+            title="Uddan — How it works"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
           />
         </div>
-      </div>
+      </section>
     </>
   );
 }
