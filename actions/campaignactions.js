@@ -316,3 +316,153 @@ export async function deleteCampaign(id) {
         return { error: "Failed to delete campaign. Please try again." }
     }
 }
+
+// ---------------------------------------------------------------------------
+// getPublicCampaigns — public listing for the discovery/browse page
+//
+// No authentication required.
+// Only returns campaigns with status "active" or "completed" (never "draft").
+// Accepts optional search (title substring) and category filter.
+// ---------------------------------------------------------------------------
+export async function getPublicCampaigns({ search = "", category = "", page = 1, limit = 12 } = {}) {
+    await connectDb()
+
+    // ── Sanitise inputs ──────────────────────────────────────────────────
+    const safePage  = Math.max(1, Number.isInteger(Number(page))  ? Number(page)  : 1)
+    const safeLimit = Math.min(48, Math.max(1, Number.isInteger(Number(limit)) ? Number(limit) : 12))
+    const safeSearch   = typeof search   === "string" ? search.trim().slice(0, 100)   : ""
+    const safeCategory = typeof category === "string" ? category.trim().slice(0, 50)  : ""
+
+    const VALID_CATEGORIES = [
+        "Technology", "Education", "Health", "Environment",
+        "Arts & Culture", "Community", "Business", "Other",
+    ]
+
+    // ── Build query ──────────────────────────────────────────────────────
+    // Show active and completed campaigns — never drafts or internally-expired
+    const query = { status: { $in: ["active", "completed"] } }
+
+    if (safeCategory && VALID_CATEGORIES.includes(safeCategory)) {
+        query.category = safeCategory
+    }
+
+    if (safeSearch) {
+        // Case-insensitive substring match on title.
+        // Regex is built from the sanitised string — no user-controlled regex injection
+        // because safeSearch has already been length-capped and trimmed.
+        query.title = { $regex: safeSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" }
+    }
+
+    try {
+        const skip  = (safePage - 1) * safeLimit
+        const total = await Campaign.countDocuments(query)
+
+        const campaigns = await Campaign.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(safeLimit)
+            // Populate only the safe public fields of the creator
+            .populate({ path: "creator", select: "username name profilepic" })
+            .lean()
+
+        const now = new Date()
+        const serialised = campaigns.map((c) => ({
+            _id:           c._id.toString(),
+            title:         c.title,
+            slug:          c.slug,
+            description:   c.description,
+            category:      c.category,
+            coverImage:    c.coverImage,
+            goalAmount:    c.goalAmount,
+            raisedAmount:  c.raisedAmount,
+            supporterCount: c.supporterCount,
+            deadline:      c.deadline.toISOString(),
+            createdAt:     c.createdAt.toISOString(),
+            status:        c.status,
+            // Display status: active campaigns past their deadline appear as expired
+            displayStatus: c.status === "active" && c.deadline < now ? "expired" : c.status,
+            creator: c.creator
+                ? {
+                    _id:        c.creator._id.toString(),
+                    username:   c.creator.username,
+                    name:       c.creator.name ?? c.creator.username,
+                    profilepic: c.creator.profilepic ?? "",
+                  }
+                : null,
+        }))
+
+        return {
+            success:  true,
+            campaigns: serialised,
+            total,
+            page:     safePage,
+            pages:    Math.ceil(total / safeLimit),
+        }
+    } catch (err) {
+        console.error("getPublicCampaigns error:", err)
+        return { error: "Failed to load campaigns. Please try again." }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// getCampaignBySlug — public detail view for a single campaign
+//
+// No authentication required.
+// Only returns campaigns with status "active" or "completed".
+// Drafts are never surfaced here.
+// ---------------------------------------------------------------------------
+export async function getCampaignBySlug(slug) {
+    // Sanitise: slugs are lowercase alphanum + hyphens
+    const safeSlug = typeof slug === "string"
+        ? slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "").slice(0, 120)
+        : ""
+
+    if (!safeSlug) return { error: "Invalid campaign slug" }
+
+    await connectDb()
+
+    try {
+        const campaign = await Campaign.findOne({
+            slug: safeSlug,
+            status: { $in: ["active", "completed"] },
+        })
+            .populate({ path: "creator", select: "username name profilepic coverpic" })
+            .lean()
+
+        if (!campaign) return { notFound: true }
+
+        const now = new Date()
+        return {
+            success: true,
+            campaign: {
+                _id:           campaign._id.toString(),
+                title:         campaign.title,
+                slug:          campaign.slug,
+                description:   campaign.description,
+                category:      campaign.category,
+                coverImage:    campaign.coverImage,
+                goalAmount:    campaign.goalAmount,
+                raisedAmount:  campaign.raisedAmount,
+                supporterCount: campaign.supporterCount,
+                deadline:      campaign.deadline.toISOString(),
+                createdAt:     campaign.createdAt.toISOString(),
+                status:        campaign.status,
+                displayStatus: campaign.status === "active" && campaign.deadline < now
+                    ? "expired"
+                    : campaign.status,
+                creator: campaign.creator
+                    ? {
+                        _id:        campaign.creator._id.toString(),
+                        username:   campaign.creator.username,
+                        name:       campaign.creator.name ?? campaign.creator.username,
+                        profilepic: campaign.creator.profilepic ?? "",
+                        coverpic:   campaign.creator.coverpic   ?? "",
+                      }
+                    : null,
+            },
+        }
+    } catch (err) {
+        console.error("getCampaignBySlug error:", err)
+        return { error: "Failed to load campaign. Please try again." }
+    }
+}

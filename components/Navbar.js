@@ -21,6 +21,16 @@ const Navbar = () => {
                     <span className="text-base md:text-lg tracking-wide">Uddan</span>
                 </Link>
 
+                {/* Desktop centre nav */}
+                <div className="hidden md:flex items-center">
+                    <Link
+                        href="/campaigns"
+                        className="text-sm text-slate-300 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                        Explore
+                    </Link>
+                </div>
+
                 {/* Desktop right side */}
                 <div className="hidden md:flex items-center gap-3">
                     {session ? (
@@ -47,6 +57,12 @@ const Navbar = () => {
                                                 <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 transition-colors">
                                                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" /></svg>
                                                     Dashboard
+                                                </Link>
+                                            </li>
+                                            <li>
+                                                <Link href="/campaigns" className="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                                                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                    Explore
                                                 </Link>
                                             </li>
                                             <li>
@@ -111,6 +127,10 @@ const Navbar = () => {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h18M3 17h18" /></svg>
                                 Dashboard
                             </Link>
+                            <Link href="/campaigns" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-blue-900 transition-colors text-sm">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                Explore
+                            </Link>
                             <Link href={`/${session.user.name}`} onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-blue-900 transition-colors text-sm">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                 Your Page
@@ -121,9 +141,15 @@ const Navbar = () => {
                             </button>
                         </>
                     ) : (
-                        <Link href="/login" onClick={() => setShowMobileMenu(false)} className="block px-4 py-2.5 rounded-lg hover:bg-blue-900 transition-colors text-sm">
-                            Login
-                        </Link>
+                        <>
+                            <Link href="/campaigns" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-blue-900 transition-colors text-sm">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                Explore
+                            </Link>
+                            <Link href="/login" onClick={() => setShowMobileMenu(false)} className="block px-4 py-2.5 rounded-lg hover:bg-blue-900 transition-colors text-sm">
+                                Login
+                            </Link>
+                        </>
                     )}
                 </div>
             )}
