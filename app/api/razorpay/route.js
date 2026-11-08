@@ -27,116 +27,141 @@ import User from "@/models/User";
 // meaning it counts transactions, not unique contributors.
 // ---------------------------------------------------------------------------
 export const POST = async (req) => {
-    await connectDb()
-
-    // ── 1. Parse the form-encoded body from Razorpay ─────────────────────
-    let body
+    // Outer try/catch so any unexpected throw returns a JSON error instead of
+    // a bare 500, and logs the full error to the terminal for debugging.
     try {
-        const raw = await req.formData()
-        body = Object.fromEntries(raw)
-    } catch {
-        return NextResponse.json({ success: false, message: "Invalid request body" })
-    }
+        await connectDb()
 
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body
+        // ── 1. Parse the form-encoded body from Razorpay ─────────────────
+        let body
+        try {
+            const raw = await req.formData()
+            body = Object.fromEntries(raw)
+        } catch (parseErr) {
+            console.error("[razorpay] Failed to parse request body:", parseErr?.message)
+            return NextResponse.json({ success: false, message: "Invalid request body" })
+        }
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-        return NextResponse.json({ success: false, message: "Missing payment fields" })
-    }
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body
 
-    // ── 2. Look up the pending Payment record ────────────────────────────
-    const p = await Payment.findOne({ oid: razorpay_order_id })
-    if (!p) {
-        return NextResponse.json({ success: false, message: "Order not found" })
-    }
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            console.warn("[razorpay] Missing fields — order:", !!razorpay_order_id,
+                "payment:", !!razorpay_payment_id, "sig:", !!razorpay_signature)
+            return NextResponse.json({ success: false, message: "Missing payment fields" })
+        }
 
-    // ── 3. Idempotency — already processed ──────────────────────────────
-    // If done is already true this is a duplicate callback.  Redirect to the
-    // appropriate success page without modifying anything.
-    if (p.done === true) {
-        const successUrl = _buildSuccessUrl(p)
-        return NextResponse.redirect(successUrl)
-    }
+        // ── 2. Look up the pending Payment record ─────────────────────────
+        const p = await Payment.findOne({ oid: razorpay_order_id })
+        if (!p) {
+            console.warn("[razorpay] No Payment record for order:", razorpay_order_id)
+            return NextResponse.json({ success: false, message: "Order not found" })
+        }
 
-    // ── 4. Look up creator's Razorpay secret for signature verification ──
-    const user = await User.findOne({ username: p.to_user })
-    if (!user || !user.razorpaysecret) {
-        return NextResponse.json({ success: false, message: "Creator credentials not found" })
-    }
-
-    // ── 5. Verify HMAC signature ─────────────────────────────────────────
-    const isValid = validatePaymentVerification(
-        { order_id: razorpay_order_id, payment_id: razorpay_payment_id },
-        razorpay_signature,
-        user.razorpaysecret
-    )
-
-    if (!isValid) {
-        return NextResponse.json({ success: false, message: "Payment verification failed" })
-    }
-
-    // ── 6. Store payment ID and mark done (unique index prevents duplicates)
-    try {
-        await Payment.findOneAndUpdate(
-            { oid: razorpay_order_id, done: false },   // only update if still pending
-            {
-                done:              true,
-                razorpayPaymentId: razorpay_payment_id,
-                updatedAt:         new Date(),
-            }
-        )
-    } catch (err) {
-        // Duplicate key on razorpayPaymentId means this payment_id was already
-        // stored — another request got here first.  Redirect without re-counting.
-        if (err.code === 11000) {
-            const successUrl = _buildSuccessUrl(p)
+        // ── 3. Idempotency — already processed ───────────────────────────
+        // If done is already true this is a duplicate callback.  Redirect to
+        // the appropriate success page without modifying anything.
+        if (p.done === true) {
+            console.log("[razorpay] Already processed, redirecting:", razorpay_order_id)
+            const successUrl = await buildSuccessUrl(p)   // ← must be awaited
             return NextResponse.redirect(successUrl)
         }
-        console.error("Payment update error:", err)
-        return NextResponse.json({ success: false, message: "Failed to record payment" })
-    }
 
-    // ── 7. Update campaign totals if this is a campaign contribution ──────
-    if (p.campaign) {
+        // ── 4. Look up creator's Razorpay secret for signature verification
+        const user = await User.findOne({ username: p.to_user })
+        if (!user || !user.razorpaysecret) {
+            console.error("[razorpay] Creator not found or has no razorpaysecret for user:", p.to_user)
+            return NextResponse.json({ success: false, message: "Creator credentials not found" })
+        }
+
+        // ── 5. Verify HMAC signature ──────────────────────────────────────
+        const isValid = validatePaymentVerification(
+            { order_id: razorpay_order_id, payment_id: razorpay_payment_id },
+            razorpay_signature,
+            user.razorpaysecret
+        )
+
+        if (!isValid) {
+            console.warn("[razorpay] Signature verification failed for order:", razorpay_order_id)
+            return NextResponse.json({ success: false, message: "Payment verification failed" })
+        }
+
+        // ── 6. Store payment ID and mark done (unique index prevents duplicates)
         try {
-            await Campaign.findByIdAndUpdate(
-                p.campaign,
+            await Payment.findOneAndUpdate(
+                { oid: razorpay_order_id, done: false },   // only update if still pending
                 {
-                    $inc: {
-                        raisedAmount:   p.amount,    // stored in rupees
-                        supporterCount: 1,           // one transaction = one supporter
-                    },
+                    done:              true,
+                    razorpayPaymentId: razorpay_payment_id,
+                    updatedAt:         new Date(),
                 }
             )
-        } catch (err) {
-            // Log but do not block — the payment is already confirmed.
-            // Campaign totals can be reconciled from Payment records if needed.
-            console.error("Campaign totals update error:", err)
+        } catch (updateErr) {
+            // Duplicate key on razorpayPaymentId means this payment_id was
+            // already stored — another concurrent request got here first.
+            // Redirect to the success page without re-counting.
+            if (updateErr.code === 11000) {
+                console.log("[razorpay] Duplicate payment_id, skipping:", razorpay_payment_id)
+                const successUrl = await buildSuccessUrl(p)   // ← must be awaited
+                return NextResponse.redirect(successUrl)
+            }
+            console.error("[razorpay] Payment update error:", updateErr?.message)
+            return NextResponse.json({ success: false, message: "Failed to record payment" })
         }
-    }
 
-    // ── 8. Redirect to appropriate success page ──────────────────────────
-    const successUrl = _buildSuccessUrl(p)
-    return NextResponse.redirect(successUrl)
+        // ── 7. Update campaign totals if this is a campaign contribution ──
+        if (p.campaign) {
+            try {
+                await Campaign.findByIdAndUpdate(
+                    p.campaign,
+                    {
+                        $inc: {
+                            raisedAmount:   p.amount,   // stored in rupees
+                            supporterCount: 1,          // one transaction = one supporter
+                        },
+                    }
+                )
+                console.log("[razorpay] Campaign totals updated for campaign:", p.campaign.toString())
+            } catch (campaignErr) {
+                // Log but do not block — the payment is already confirmed.
+                // Campaign totals can be reconciled from Payment records if needed.
+                console.error("[razorpay] Campaign totals update error:", campaignErr?.message)
+            }
+        }
+
+        // ── 8. Redirect to appropriate success page ───────────────────────
+        const successUrl = await buildSuccessUrl(p)   // ← must be awaited
+        console.log("[razorpay] Payment verified, redirecting to:", successUrl)
+        return NextResponse.redirect(successUrl)
+
+    } catch (err) {
+        // Catch-all: log the full error to the terminal and return a safe JSON
+        // response so the browser does not see a raw Next.js 500 page.
+        console.error("[razorpay] Unhandled error in POST handler:", err)
+        return NextResponse.json(
+            { success: false, message: "Internal server error — please try again." },
+            { status: 500 }
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
-// _buildSuccessUrl
-// Campaign payments return to /campaign/{slug}?paymentdone=true
-// Legacy profile payments return to /{username}?paymentdone=true
+// buildSuccessUrl  (async — must be awaited at every call site)
+//
+// Campaign payments → /campaign/{slug}?paymentdone=true
+// Legacy profile payments → /{username}?paymentdone=true
 // ---------------------------------------------------------------------------
-async function _buildSuccessUrl(payment) {
+async function buildSuccessUrl(payment) {
     const base = process.env.NEXT_PUBLIC_URL || ""
 
-    // If this payment has a campaign reference, resolve the slug
     if (payment.campaign) {
         try {
             const campaign = await Campaign.findById(payment.campaign).select("slug").lean()
             if (campaign?.slug) {
                 return `${base}/campaign/${campaign.slug}?paymentdone=true`
             }
-        } catch {
-            // Fall through to profile URL on error
+        } catch (err) {
+            console.error("[razorpay] buildSuccessUrl campaign lookup error:", err?.message)
+            // Fall through to the profile URL
         }
     }
 

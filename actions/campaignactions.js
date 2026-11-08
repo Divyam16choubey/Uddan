@@ -591,3 +591,235 @@ export async function initiateCampaignPayment(slug, amountRupees, paymentform) {
         campaignSlug:  campaign.slug,
     }
 }
+
+// ---------------------------------------------------------------------------
+// getCreatorAnalytics — dashboard analytics for the authenticated creator
+//
+// Security:
+//   - Creator identity established from server-side session only.
+//   - All campaign and payment queries are scoped to the creator's own
+//     Campaign ObjectIds — another user's data is never accessible.
+//   - Only done:true payments with a campaign reference are included.
+//   - No Razorpay secrets or private credentials are returned.
+//
+// Definitions:
+//   totalRaised          — sum of amount (rupees) across all done:true
+//                          campaign-specific payments the creator received.
+//   totalContributions   — count of those same payments.
+//   activeCampaigns      — campaigns with status "active".
+//   completedCampaigns   — campaigns with status "completed".
+//   supporterCount       — taken directly from Campaign.supporterCount
+//                          (updated atomically by /api/razorpay on each
+//                          verified payment).
+//
+// Pagination:
+//   contributionPage  — 1-based page number (default 1).
+//   contributionLimit — max items per page (default 10, max 50).
+// ---------------------------------------------------------------------------
+export async function getCreatorAnalytics({ contributionPage = 1, contributionLimit = 10 } = {}) {
+    const { sessionUser, error } = await getSessionUser()
+    if (error) return { error }
+
+    // Sanitise pagination inputs
+    const safePage  = Math.max(1, Number.isInteger(Number(contributionPage))  ? Number(contributionPage)  : 1)
+    const safeLimit = Math.min(50, Math.max(1, Number.isInteger(Number(contributionLimit)) ? Number(contributionLimit) : 10))
+
+    // Lazy-load Payment model to avoid potential circular-import at module
+    // load time (same pattern used in initiateCampaignPayment).
+    const Payment = (await import("@/models/Payment")).default
+
+    try {
+        // ── Step 1: get all this creator's campaigns ──────────────────────
+        const campaigns = await Campaign.find(
+            { creator: sessionUser._id },
+            { _id: 1, title: 1, slug: 1, coverImage: 1, goalAmount: 1, raisedAmount: 1,
+              supporterCount: 1, status: 1, deadline: 1, createdAt: 1 }
+        ).sort({ createdAt: -1 }).lean()
+
+        const campaignIds = campaigns.map((c) => c._id)
+
+        const now = new Date()
+
+        // ── Step 2: campaign summary counts ──────────────────────────────
+        let activeCampaigns    = 0
+        let completedCampaigns = 0
+        let draftCampaigns     = 0
+        let expiredCampaigns   = 0
+
+        for (const c of campaigns) {
+            const display = c.status === "active" && c.deadline < now ? "expired" : c.status
+            if (display === "active")    activeCampaigns++
+            else if (display === "completed") completedCampaigns++
+            else if (display === "draft")     draftCampaigns++
+            else                              expiredCampaigns++
+        }
+
+        if (campaignIds.length === 0) {
+            // No campaigns — return zero state immediately
+            return {
+                success: true,
+                summary: {
+                    totalRaised: 0,
+                    totalContributions: 0,
+                    activeCampaigns: 0,
+                    completedCampaigns: 0,
+                    draftCampaigns: 0,
+                    expiredCampaigns: 0,
+                },
+                campaignPerformance: [],
+                contributions: [],
+                contributionTotal: 0,
+                contributionPage: safePage,
+                contributionPages: 0,
+                dailySeries: [],
+            }
+        }
+
+        // ── Step 3: payment aggregation (total raised + count) ────────────
+        // Run alongside contribution fetch in parallel.
+        const [paymentSummaryResult, contributionData, dailySeriesResult] = await Promise.all([
+
+            // 3a. Aggregate total raised and total contribution count
+            Payment.aggregate([
+                {
+                    $match: {
+                        done:     true,
+                        campaign: { $in: campaignIds },
+                    },
+                },
+                {
+                    $group: {
+                        _id:               null,
+                        totalRaised:       { $sum: "$amount" },
+                        totalContributions: { $sum: 1 },
+                    },
+                },
+            ]),
+
+            // 3b. Paginated contribution history — most recent first
+            // Two sub-queries: total count + paginated page
+            (async () => {
+                const skip  = (safePage - 1) * safeLimit
+                const query = { done: true, campaign: { $in: campaignIds } }
+
+                const [total, docs] = await Promise.all([
+                    Payment.countDocuments(query),
+                    Payment.find(query, {
+                        // Never return oid, razorpayPaymentId, to_user (internal)
+                        name: 1, message: 1, amount: 1, currency: 1,
+                        campaign: 1, createdAt: 1,
+                    })
+                        .sort({ createdAt: -1 })
+                        .skip(skip)
+                        .limit(safeLimit)
+                        .populate({ path: "campaign", select: "title slug" })
+                        .lean(),
+                ])
+
+                return { total, docs }
+            })(),
+
+            // 3c. Daily contribution series — last 30 days (UTC)
+            Payment.aggregate([
+                {
+                    $match: {
+                        done:     true,
+                        campaign: { $in: campaignIds },
+                        createdAt: {
+                            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                        },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" },
+                        },
+                        amount: { $sum: "$amount" },
+                        count:  { $sum: 1 },
+                    },
+                },
+                { $sort: { _id: 1 } },
+            ]),
+        ])
+
+        // ── Step 4: serialise results ─────────────────────────────────────
+
+        const totalRaised       = paymentSummaryResult[0]?.totalRaised       ?? 0
+        const totalContributions = paymentSummaryResult[0]?.totalContributions ?? 0
+
+        // Campaign performance list — enrich with displayStatus
+        const campaignPerformance = campaigns.map((c) => ({
+            _id:            c._id.toString(),
+            title:          c.title,
+            slug:           c.slug,
+            coverImage:     c.coverImage,
+            goalAmount:     c.goalAmount,
+            raisedAmount:   c.raisedAmount,
+            supporterCount: c.supporterCount,
+            deadline:       c.deadline.toISOString(),
+            createdAt:      c.createdAt.toISOString(),
+            status:         c.status,
+            displayStatus:  c.status === "active" && c.deadline < now ? "expired" : c.status,
+            progress:       c.goalAmount > 0
+                ? Math.min(100, Math.round((c.raisedAmount / c.goalAmount) * 100))
+                : 0,
+        }))
+
+        // Contribution list — safe fields only
+        const contributions = contributionData.docs.map((p) => ({
+            _id:           p._id.toString(),
+            name:          p.name || "Anonymous",
+            message:       p.message ?? "",
+            amount:        p.amount,
+            currency:      p.currency ?? "INR",
+            createdAt:     p.createdAt.toISOString(),
+            campaignId:    p.campaign?._id?.toString() ?? null,
+            campaignTitle: p.campaign?.title ?? "—",
+            campaignSlug:  p.campaign?.slug  ?? null,
+        }))
+
+        const contributionTotal = contributionData.total
+        const contributionPages = Math.ceil(contributionTotal / safeLimit)
+
+        // Daily series — fill in missing days with zeros for a continuous chart
+        const seriesMap = {}
+        for (const entry of dailySeriesResult) {
+            seriesMap[entry._id] = { amount: entry.amount, count: entry.count }
+        }
+
+        const dailySeries = []
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date()
+            d.setUTCHours(0, 0, 0, 0)
+            d.setUTCDate(d.getUTCDate() - i)
+            const key = d.toISOString().split("T")[0]
+            dailySeries.push({
+                date:   key,
+                amount: seriesMap[key]?.amount ?? 0,
+                count:  seriesMap[key]?.count  ?? 0,
+            })
+        }
+
+        return {
+            success: true,
+            summary: {
+                totalRaised,
+                totalContributions,
+                activeCampaigns,
+                completedCampaigns,
+                draftCampaigns,
+                expiredCampaigns,
+            },
+            campaignPerformance,
+            contributions,
+            contributionTotal,
+            contributionPage:  safePage,
+            contributionPages,
+            dailySeries,
+        }
+    } catch (err) {
+        console.error("getCreatorAnalytics error:", err)
+        return { error: "Failed to load analytics. Please try again." }
+    }
+}
