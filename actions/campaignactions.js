@@ -466,3 +466,128 @@ export async function getCampaignBySlug(slug) {
         return { error: "Failed to load campaign. Please try again." }
     }
 }
+
+// ---------------------------------------------------------------------------
+// initiateCampaignPayment — create a Razorpay order for a specific campaign
+//
+// No authentication required — guests can contribute.
+//
+// Security:
+//   - Campaign is looked up by slug (server-side) — client cannot inject a
+//     different campaign ID.
+//   - Amount is validated server-side — client-supplied value is not trusted.
+//   - Creator identity comes from campaign.creator (ObjectId ref) → User doc,
+//     never from the client.
+//   - razorpaysecret never leaves the server.
+//   - Only active campaigns before their deadline accept contributions.
+// ---------------------------------------------------------------------------
+export async function initiateCampaignPayment(slug, amountRupees, paymentform) {
+    // ── 1. Validate amount server-side ───────────────────────────────────
+    const MIN_INR = 10
+    const MAX_INR = 100000
+
+    const amount = Number(amountRupees)
+    if (!amountRupees || isNaN(amount) || amount < MIN_INR) {
+        return { error: `Minimum contribution is ₹${MIN_INR}` }
+    }
+    if (amount > MAX_INR) {
+        return { error: `Maximum contribution is ₹${MAX_INR.toLocaleString("en-IN")}` }
+    }
+    if (!Number.isInteger(amount)) {
+        return { error: "Amount must be a whole number" }
+    }
+
+    // ── 2. Sanitise paymentform fields ───────────────────────────────────
+    const contributorName    = (paymentform?.name    ?? "").toString().trim().slice(0, 100)
+    const contributorMessage = (paymentform?.message ?? "").toString().trim().slice(0, 500)
+
+    if (!contributorName || contributorName.length < 2) {
+        return { error: "Please enter your name (at least 2 characters)" }
+    }
+
+    // ── 3. Look up the campaign ──────────────────────────────────────────
+    const safeSlug = typeof slug === "string"
+        ? slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "").slice(0, 120)
+        : ""
+    if (!safeSlug) return { error: "Invalid campaign" }
+
+    await connectDb()
+
+    const campaign = await Campaign.findOne({ slug: safeSlug })
+        .populate({ path: "creator", select: "username razorpayid razorpaysecret" })
+        .lean()
+
+    if (!campaign) return { error: "Campaign not found" }
+
+    // ── 4. Validate campaign is open for contributions ───────────────────
+    if (campaign.status === "draft") {
+        return { error: "This campaign is not yet published" }
+    }
+    if (campaign.status === "completed") {
+        return { error: "This campaign has already reached its goal" }
+    }
+    // Treat past-deadline active campaigns as expired for contribution purposes
+    if (new Date() > new Date(campaign.deadline)) {
+        return { error: "This campaign's deadline has passed" }
+    }
+    if (campaign.status === "expired") {
+        return { error: "This campaign has expired" }
+    }
+
+    // ── 5. Validate creator has Razorpay configured ──────────────────────
+    const creator = campaign.creator
+    if (!creator?.razorpayid || !creator?.razorpaysecret) {
+        return { error: "Payments are not configured for this campaign yet" }
+    }
+
+    // ── 6. Create Razorpay order with creator's credentials ──────────────
+    const { default: Razorpay } = await import("razorpay")
+    const instance = new Razorpay({
+        key_id:     creator.razorpayid,
+        key_secret: creator.razorpaysecret,
+    })
+
+    const amountPaise = amount * 100   // Razorpay works in paise
+
+    let order
+    try {
+        order = await instance.orders.create({
+            amount:   amountPaise,
+            currency: "INR",
+        })
+    } catch (err) {
+        console.error("Razorpay order creation error:", err)
+        return { error: "Could not create payment order. Please try again." }
+    }
+
+    // ── 7. Write the pending Payment record ──────────────────────────────
+    // import Payment here to avoid a circular reference at module-load time
+    const Payment = (await import("@/models/Payment")).default
+
+    try {
+        await Payment.create({
+            oid:       order.id,
+            amount:    amount,             // stored in rupees
+            currency:  "INR",
+            to_user:   creator.username,   // preserves legacy lookup in /api/razorpay
+            campaign:  campaign._id,       // campaign-specific linkage
+            name:      contributorName,
+            message:   contributorMessage,
+            done:      false,
+        })
+    } catch (err) {
+        console.error("Payment record creation error:", err)
+        return { error: "Could not record payment. Please try again." }
+    }
+
+    // ── 8. Return only the safe public fields needed by checkout ─────────
+    // razorpaysecret is NOT returned.
+    return {
+        success:       true,
+        orderId:       order.id,
+        razorpayKeyId: creator.razorpayid,
+        amountPaise,
+        campaignTitle: campaign.title,
+        campaignSlug:  campaign.slug,
+    }
+}

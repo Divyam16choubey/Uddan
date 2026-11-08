@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getCampaignBySlug } from "@/actions/campaignactions"
+import CampaignContributePanel from "@/components/CampaignContributePanel"
 
 // Opt out of static prerender — data is dynamic per slug
 export const instant = false
@@ -216,24 +217,13 @@ export default async function CampaignDetailPage({ params }) {
                             Deadline: {formatDate(c.deadline)}
                         </p>
 
-                        {/* CTA */}
-                        {canSupport && creatorSlug ? (
-                            <Link href={`/${creatorSlug}`}>
-                                <button className="w-full py-3 text-sm font-semibold text-white bg-gradient-to-br from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 transition-all rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
-                                    Support This Campaign
-                                </button>
-                            </Link>
-                        ) : (
-                            <div className="w-full py-3 text-sm font-medium text-slate-500 bg-white/5 rounded-lg text-center cursor-not-allowed border border-white/10">
-                                {isCompleted ? "Campaign completed" : "Campaign has ended"}
-                            </div>
-                        )}
-
-                        {canSupport && !creatorSlug && (
-                            <p className="text-xs text-slate-500 text-center">
-                                Contributions not available right now.
-                            </p>
-                        )}
+                        {/* CTA — campaign-specific contribution panel */}
+                        <CampaignContributePanel
+                            campaignSlug={c.slug}
+                            campaignTitle={c.title}
+                            canSupport={canSupport}
+                            closedReason={isCompleted ? "Campaign completed" : "Campaign has ended"}
+                        />
                     </div>
 
                     {/* Creator card */}
