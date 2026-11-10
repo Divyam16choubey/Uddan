@@ -57,8 +57,6 @@ const CampaignSchema = new Schema(
             min: [100, "Funding goal must be at least ₹100"],
             max: [10000000, "Funding goal cannot exceed ₹1,00,00,000"],
         },
-        // raisedAmount and supporterCount are ONLY updated by the payment
-        // webhook — never via the campaign update action.
         raisedAmount: {
             type: Number,
             default: 0,
@@ -71,8 +69,6 @@ const CampaignSchema = new Schema(
         },
 
         // ── Ownership & Lifecycle ─────────────────────────────────────────
-        // ObjectId ref to User — identity is established server-side from
-        // the session and never accepted from the client.
         creator: {
             type: Schema.Types.ObjectId,
             ref: "User",
@@ -84,29 +80,51 @@ const CampaignSchema = new Schema(
             required: [true, "Campaign deadline is required"],
         },
 
-        // Status rules:
-        //   draft     — saved but not yet published (reserved for future use)
+        // Lifecycle status — orthogonal to moderation status.
+        //   draft     — saved but not yet published
         //   active    — published and accepting support
         //   expired   — deadline has passed but goal not met
-        //   completed — creator has manually marked the campaign as done
-        //               OR the funding goal was reached (set programmatically
-        //               by the payment webhook, not by the update action)
-        //
-        // Automatic expiry is NOT applied by the update action; the status
-        // is derived at read time for display purposes only (see server
-        // actions).  This preserves the stored status as the source of truth.
+        //   completed — goal reached or manually marked done
         status: {
             type: String,
             enum: ["draft", "active", "expired", "completed"],
             default: "active",
         },
+
+        // ── Moderation ─────────────────────────────────────────────────────
+        // Separated from lifecycle status.  Defaults to "approved" so that
+        // existing campaigns remain visible after the schema change — no
+        // migration script is needed.
+        //   pending   — awaiting admin review (not shown publicly)
+        //   approved  — visible in discovery, accepts contributions
+        //   rejected  — admin rejected; hidden from public, no new contributions
+        //   suspended — was approved, now temporarily disabled by admin
+        moderationStatus: {
+            type: String,
+            enum: ["pending", "approved", "rejected", "suspended"],
+            default: "approved",
+            index: true,
+        },
+        moderationNote: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        moderatedBy: {
+            type: Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        moderatedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
-        timestamps: true, // adds createdAt and updatedAt automatically
+        timestamps: true,
     }
 );
 
-// Compound index: quickly fetch all campaigns for a creator, newest first.
 CampaignSchema.index({ creator: 1, createdAt: -1 });
 
 export default mongoose.models.Campaign || model("Campaign", CampaignSchema);

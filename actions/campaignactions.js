@@ -97,6 +97,11 @@ export async function createCampaign(formData) {
     const { sessionUser, error } = await getSessionUser()
     if (error) return { error }
 
+    // Restricted users cannot create campaigns
+    if (sessionUser.isRestricted) {
+        return { error: "Your account is restricted — you cannot create campaigns" }
+    }
+
     const title       = formData.get("title")?.toString().trim() ?? ""
     const description = formData.get("description")?.toString().trim() ?? ""
     const category    = formData.get("category")?.toString().trim() ?? ""
@@ -339,8 +344,11 @@ export async function getPublicCampaigns({ search = "", category = "", page = 1,
     ]
 
     // ── Build query ──────────────────────────────────────────────────────
-    // Show active and completed campaigns — never drafts or internally-expired
-    const query = { status: { $in: ["active", "completed"] } }
+    // Show active and completed campaigns that are also moderation-approved.
+    const query = {
+        status: { $in: ["active", "completed"] },
+        moderationStatus: "approved",
+    }
 
     if (safeCategory && VALID_CATEGORIES.includes(safeCategory)) {
         query.category = safeCategory
@@ -425,6 +433,7 @@ export async function getCampaignBySlug(slug) {
         const campaign = await Campaign.findOne({
             slug: safeSlug,
             status: { $in: ["active", "completed"] },
+            moderationStatus: "approved",
         })
             .populate({ path: "creator", select: "username name profilepic coverpic" })
             .lean()
@@ -514,7 +523,7 @@ export async function initiateCampaignPayment(slug, amountRupees, paymentform) {
     await connectDb()
 
     const campaign = await Campaign.findOne({ slug: safeSlug })
-        .populate({ path: "creator", select: "username razorpayid razorpaysecret" })
+        .populate({ path: "creator", select: "username razorpayid razorpaysecret isRestricted" })
         .lean()
 
     if (!campaign) return { error: "Campaign not found" }
@@ -534,8 +543,16 @@ export async function initiateCampaignPayment(slug, amountRupees, paymentform) {
         return { error: "This campaign has expired" }
     }
 
+    // ── 4b. Validate moderation status ───────────────────────────────
+    if (campaign.moderationStatus && campaign.moderationStatus !== "approved") {
+        return { error: "This campaign is no longer accepting contributions" }
+    }
+
     // ── 5. Validate creator has Razorpay configured ──────────────────────
     const creator = campaign.creator
+    if (creator?.isRestricted) {
+        return { error: "This campaign's creator is currently unavailable" }
+    }
     if (!creator?.razorpayid || !creator?.razorpaysecret) {
         return { error: "Payments are not configured for this campaign yet" }
     }

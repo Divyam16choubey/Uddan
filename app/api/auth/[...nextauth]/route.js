@@ -45,16 +45,17 @@ export const authOptions = {
     },
 
     async session({ session }) {
-      // Attach the stored username to the session so the rest of the app can
-      // use session.user.name as the username identifier.
+      // Attach the stored username and role to the session so the rest of the
+      // app can use session.user.name as the username identifier and the
+      // Navbar can conditionally show the admin link.
       try {
         await connectDb();
         const dbUser = await User.findOne({ email: session.user.email });
         if (dbUser) {
           session.user.name = dbUser.username;
+          session.user.role = dbUser.role || "user";
+          session.user.isRestricted = dbUser.isRestricted || false;
         }
-        // If dbUser is null the session is still returned intact — the user
-        // will just not have an overridden name.
       } catch (err) {
         console.error('session DB error:', err);
       }

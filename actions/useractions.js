@@ -19,6 +19,11 @@ export const initiate = async (amount, to_username, paymentform) => {
         throw new Error("User not found")
     }
 
+    // Restricted users cannot receive new payments
+    if (user.isRestricted) {
+        throw new Error("This creator is currently unavailable")
+    }
+
     const instance = new Razorpay({
         key_id: user.razorpayid,
         key_secret: user.razorpaysecret,
