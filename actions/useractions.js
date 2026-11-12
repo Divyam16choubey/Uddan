@@ -105,15 +105,11 @@ export const updateProfile = async (formData, oldUsername) => {
         return { error: "Unauthorised" }
     }
 
-    // 3. Extract only the whitelisted fields from the submitted form data
-    const ALLOWED_FIELDS = [
-        "name",
-        "username",
-        "profilepic",
-        "coverpic",
-        "razorpayid",
-        "razorpaysecret",
-    ]
+    // Restricted users can update cosmetic profile fields (name, profilepic,
+    // coverpic) but CANNOT change payment credentials or username.
+    const ALLOWED_FIELDS = sessionUser.isRestricted
+        ? ["name", "profilepic", "coverpic"]
+        : ["name", "username", "profilepic", "coverpic", "razorpayid", "razorpaysecret"]
 
     const updates = {}
     for (const field of ALLOWED_FIELDS) {

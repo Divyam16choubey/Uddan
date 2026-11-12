@@ -92,17 +92,22 @@ const CampaignSchema = new Schema(
         },
 
         // ── Moderation ─────────────────────────────────────────────────────
-        // Separated from lifecycle status.  Defaults to "approved" so that
-        // existing campaigns remain visible after the schema change — no
-        // migration script is needed.
-        //   pending   — awaiting admin review (not shown publicly)
+        // Separated from lifecycle status.
+        //   pending   — awaiting admin review (not shown publicly, no contributions)
         //   approved  — visible in discovery, accepts contributions
         //   rejected  — admin rejected; hidden from public, no new contributions
         //   suspended — was approved, now temporarily disabled by admin
+        //
+        // Default is "pending" for NEW campaigns.  Existing campaigns created
+        // before this change must be migrated to "approved" to remain visible:
+        //   mongosh uddan --eval 'db.campaigns.updateMany(
+        //     { moderationStatus: { $in: [null, ""] } },
+        //     { $set: { moderationStatus: "approved" } }
+        //   )'
         moderationStatus: {
             type: String,
             enum: ["pending", "approved", "rejected", "suspended"],
-            default: "approved",
+            default: "pending",
             index: true,
         },
         moderationNote: {

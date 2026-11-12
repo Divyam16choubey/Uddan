@@ -139,6 +139,7 @@ export async function createCampaign(formData) {
             deadline:   new Date(deadline),
             creator:    sessionUser._id,
             status:     "active",
+            moderationStatus: "pending",
         })
 
         return { success: true, campaignId: campaign._id.toString(), slug: campaign.slug }
@@ -242,6 +243,11 @@ export async function updateCampaign(id, formData) {
             return { error: "Unauthorised — you do not own this campaign" }
         }
 
+        // Restricted users cannot edit campaigns
+        if (sessionUser.isRestricted) {
+            return { error: "Your account is restricted — you cannot edit campaigns" }
+        }
+
         // Prevent editing a completed campaign
         if (campaign.status === "completed") {
             return { error: "Completed campaigns cannot be edited" }
@@ -312,6 +318,11 @@ export async function deleteCampaign(id) {
 
         if (campaign.creator.toString() !== sessionUser._id.toString()) {
             return { error: "Unauthorised — you do not own this campaign" }
+        }
+
+        // Restricted users cannot delete campaigns
+        if (sessionUser.isRestricted) {
+            return { error: "Your account is restricted — you cannot delete campaigns" }
         }
 
         await Campaign.findByIdAndDelete(id)

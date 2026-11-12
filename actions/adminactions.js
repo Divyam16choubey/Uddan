@@ -223,14 +223,17 @@ export async function moderateCampaign(campaignId, action, reason = "") {
             return { error: `Campaign is already ${newModStatus}` }
         }
 
-        // Update campaign
+        // Update only the moderation fields — never touch lifecycle status
+        // (status, raisedAmount, supporterCount, slug, etc.)
         campaign.moderationStatus = newModStatus
         campaign.moderationNote   = trimmedReason
         campaign.moderatedBy      = adminUser._id
         campaign.moderatedAt      = new Date()
         await campaign.save()
 
-        // Create audit log
+        // ── Audit log ─────────────────────────────────────────────────────
+        // Written after the campaign save so a log failure cannot hide a
+        // successful moderation decision from the admin.
         const ACTION_MAP = {
             approve: "approve_campaign",
             reject:  "reject_campaign",
@@ -238,14 +241,22 @@ export async function moderateCampaign(campaignId, action, reason = "") {
             restore: "restore_campaign",
         }
 
-        await ModerationLog.create({
-            admin:           adminUser._id,
-            targetCampaign:  campaign._id,
-            action:          ACTION_MAP[action],
-            reason:           trimmedReason,
-            previousStatus,
-            newStatus:        newModStatus,
-        })
+        try {
+            await ModerationLog.create({
+                admin:          adminUser._id,
+                targetCampaign: campaign._id,
+                action:         ACTION_MAP[action],
+                reason:         trimmedReason,
+                previousStatus,
+                newStatus:      newModStatus,
+            })
+        } catch (logErr) {
+            // The moderation succeeded — log the failure but do NOT surface
+            // it as an error to the caller. The admin dashboard shows the
+            // updated moderationStatus, so the action is confirmed.
+            console.error("moderateCampaign: audit log failed for campaign",
+                campaignId, action, logErr?.message)
+        }
 
         return { success: true, moderationStatus: newModStatus }
     } catch (err) {
@@ -346,14 +357,20 @@ export async function restrictUser(userId) {
         target.isRestricted = true
         await target.save()
 
-        await ModerationLog.create({
-            admin:      adminUser._id,
-            targetUser: target._id,
-            action:     "restrict_user",
-            reason:     "Restricted by admin",
-            previousStatus: "active",
-            newStatus:     "restricted",
-        })
+        // Audit log — failure here must not undo the restriction
+        try {
+            await ModerationLog.create({
+                admin:      adminUser._id,
+                targetUser: target._id,
+                action:     "restrict_user",
+                reason:     "Restricted by admin",
+                previousStatus: "active",
+                newStatus:     "restricted",
+            })
+        } catch (logErr) {
+            console.error("restrictUser: audit log failed for user",
+                userId, logErr?.message)
+        }
 
         return { success: true }
     } catch (err) {
@@ -384,14 +401,20 @@ export async function restoreUser(userId) {
         target.isRestricted = false
         await target.save()
 
-        await ModerationLog.create({
-            admin:      adminUser._id,
-            targetUser: target._id,
-            action:     "restore_user",
-            reason:     "Restored by admin",
-            previousStatus: "restricted",
-            newStatus:     "active",
-        })
+        // Audit log — failure here must not undo the restore
+        try {
+            await ModerationLog.create({
+                admin:      adminUser._id,
+                targetUser: target._id,
+                action:     "restore_user",
+                reason:     "Restored by admin",
+                previousStatus: "restricted",
+                newStatus:     "active",
+            })
+        } catch (logErr) {
+            console.error("restoreUser: audit log failed for user",
+                userId, logErr?.message)
+        }
 
         return { success: true }
     } catch (err) {
