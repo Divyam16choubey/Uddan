@@ -71,7 +71,7 @@ function CampaignDiscoveryCard({ campaign }) {
                         src={campaign.coverImage}
                         alt={campaign.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError="this.style.display='none'"
+                        onError={(e) => { e.currentTarget.style.display = "none" }}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">

@@ -13,6 +13,21 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 export const initiate = async (amount, to_username, paymentform) => {
     await connectDb()
 
+    // Server-side amount validation (amount is in paise)
+    const amountNum = Number(amount)
+    if (!amount || isNaN(amountNum) || !Number.isInteger(amountNum) || amountNum < 100) {
+        throw new Error("Minimum contribution is ₹1")
+    }
+    if (amountNum > 10000000 * 100) { // ₹1,00,00,000 in paise
+        throw new Error("Amount exceeds the maximum allowed limit")
+    }
+
+    // Validate contributor name
+    const contributorName = (paymentform?.name ?? "").toString().trim()
+    if (!contributorName || contributorName.length < 3) {
+        throw new Error("Please enter your name (at least 3 characters)")
+    }
+
     // Fetch the creator's Razorpay credentials from the database
     const user = await User.findOne({ username: to_username })
     if (!user) {
@@ -41,8 +56,8 @@ export const initiate = async (amount, to_username, paymentform) => {
         oid: order.id,
         amount: amount / 100,
         to_user: to_username,
-        name: paymentform.name,
-        message: paymentform.message,
+        name: contributorName,
+        message: (paymentform?.message ?? "").toString().trim().slice(0, 500),
     })
 
     return order
@@ -128,10 +143,10 @@ export const updateProfile = async (formData, oldUsername) => {
         }
 
         // Apply the update and cascade to payments
-        await User.updateOne({ email: session.user.email }, updates)
+        await User.updateOne({ email: session.user.email }, { ...updates, updatedAt: new Date() })
         await Payment.updateMany({ to_user: oldUsername }, { to_user: newUsername })
     } else {
-        await User.updateOne({ email: session.user.email }, updates)
+        await User.updateOne({ email: session.user.email }, { ...updates, updatedAt: new Date() })
     }
 
     return { success: true }

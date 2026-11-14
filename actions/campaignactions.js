@@ -533,9 +533,15 @@ export async function initiateCampaignPayment(slug, amountRupees, paymentform) {
 
     await connectDb()
 
-    const campaign = await Campaign.findOne({ slug: safeSlug })
-        .populate({ path: "creator", select: "username razorpayid razorpaysecret isRestricted" })
-        .lean()
+    let campaign
+    try {
+        campaign = await Campaign.findOne({ slug: safeSlug })
+            .populate({ path: "creator", select: "username razorpayid razorpaysecret isRestricted" })
+            .lean()
+    } catch (err) {
+        console.error("initiateCampaignPayment campaign lookup error:", err)
+        return { error: "Could not load campaign. Please try again." }
+    }
 
     if (!campaign) return { error: "Campaign not found" }
 

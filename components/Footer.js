@@ -11,7 +11,7 @@ const Footer = () => {
 
                 {/* Brand */}
                 <div className="flex items-center gap-2">
-                    <img src="uddan.gif" width={24} height={24} alt="Uddan" className="invertImg opacity-80" />
+                    <img src="/uddan.gif" width={24} height={24} alt="Uddan" className="invertImg opacity-80" />
                     <span className="font-semibold text-sm tracking-wide">Uddan</span>
                 </div>
 

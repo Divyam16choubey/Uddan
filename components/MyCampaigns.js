@@ -207,18 +207,10 @@ const MyCampaigns = () => {
     }
 
     useEffect(() => {
-        // Async logic lives inside an IIFE so setState is called from an async
-        // callback — satisfies the React Compiler set-state-in-effect rule.
+        // Wrap in an async IIFE — the React Compiler requires setState calls
+        // to come from async callbacks inside effects, not synchronously.
         ;(async () => {
-            setLoading(true)
-            setFetchError(null)
-            const result = await getUserCampaigns()
-            if (result.error) {
-                setFetchError(result.error)
-            } else {
-                setCampaigns(result.campaigns)
-            }
-            setLoading(false)
+            await loadCampaigns()
         })()
     }, [])
 

@@ -17,7 +17,7 @@ const Navbar = () => {
                     className="flex items-center gap-2 font-bold text-lg hover:opacity-80 transition-opacity"
                     href="/"
                 >
-                    <img className="invertImg" src="uddan.gif" width={36} height={36} alt="Uddan logo" />
+                    <img className="invertImg" src="/uddan.gif" width={36} height={36} alt="Uddan logo" />
                     <span className="text-base md:text-lg tracking-wide">Uddan</span>
                 </Link>
 

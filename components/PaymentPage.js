@@ -48,32 +48,49 @@ const PaymentPage = ({ username }) => {
     }
 
     const pay = async (amount) => {
-        let a = await initiate(amount, username, paymentform)
-        let orderId = a.id
-        var options = {
-            "key": currentUser.razorpayid,
-            "amount": amount,
-            "currency": "INR",
-            "name": "Uddan",
-            "description": "Support " + username,
-            "image": "https://example.com/your_logo",
-            "order_id": orderId,
-            "callback_url": `${process.env.NEXT_PUBLIC_URL}/api/razorpay`,
-            "prefill": {
-                "name": "Gaurav Kumar",
-                "email": "gaurav.kumar@example.com",
-                "contact": "9000090000"
-            },
-            "notes": { "address": "Razorpay Corporate Office" },
-            "theme": { "color": "#3b82f6" }
+        // Guard: name is required (message is optional for legacy flow)
+        if (!paymentform.name || paymentform.name.trim().length < 3) {
+            toast.error("Please enter your name (at least 3 characters) before paying.", {
+                position: "top-right", autoClose: 4000, theme: "dark", transition: Bounce,
+            })
+            return
         }
-        var rzp1 = new Razorpay(options);
-        rzp1.open();
+        // Guard: amount must be a positive integer in paise (min ₹1 → 100 paise)
+        if (!amount || amount < 100) {
+            toast.error("Please enter a valid amount.", {
+                position: "top-right", autoClose: 4000, theme: "dark", transition: Bounce,
+            })
+            return
+        }
+
+        try {
+            const a = await initiate(amount, username, paymentform)
+            const orderId = a.id
+            const options = {
+                key:         currentUser.razorpayid,
+                amount:      amount,
+                currency:    "INR",
+                name:        "Uddan",
+                description: "Support " + username,
+                order_id:    orderId,
+                callback_url: `${process.env.NEXT_PUBLIC_URL}/api/razorpay`,
+                prefill: {
+                    name: paymentform.name.trim(),
+                },
+                theme: { color: "#3b82f6" },
+            }
+            const rzp1 = new Razorpay(options)
+            rzp1.open()
+        } catch (err) {
+            console.error("PaymentPage pay() error:", err)
+            toast.error(err?.message || "Could not create payment order. Please try again.", {
+                position: "top-right", autoClose: 5000, theme: "dark", transition: Bounce,
+            })
+        }
     }
 
     const payDisabled =
-        !paymentform.name || paymentform.name.length < 3 ||
-        !paymentform.message || paymentform.message.length < 4 ||
+        !paymentform.name || paymentform.name.trim().length < 3 ||
         !paymentform.amount || paymentform.amount.length < 1
 
     /* ── Loading skeleton ───────────────────────────────────────────── */
@@ -227,14 +244,15 @@ const PaymentPage = ({ username }) => {
                     </div>
 
                     {/* Quick-pay */}
-                    <div className="mt-4">
+                        <div className="mt-4">
                         <p className="text-xs text-slate-500 mb-2">Quick amounts</p>
                         <div className="flex gap-2 flex-wrap">
                             {[10, 20, 50, 100].map((amt) => (
                                 <button
                                     key={amt}
                                     onClick={() => pay(amt * 100)}
-                                    className="px-4 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    disabled={!paymentform.name || paymentform.name.trim().length < 3}
+                                    className="px-4 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     ₹{amt}
                                 </button>

@@ -155,7 +155,7 @@ const Dashboard = () => {
                 </h1>
 
                 {/* ── Tab switcher ─────────────────────────────────────── */}
-                <div className="flex gap-2 mb-6 bg-white/5 border border-white/10 rounded-xl p-1">
+                <div className="flex gap-2 mb-6 bg-white/5 border border-white/10 rounded-xl p-1 overflow-x-auto">
                     <Tab
                         active={activeTab === "campaigns"}
                         onClick={() => setActiveTab("campaigns")}

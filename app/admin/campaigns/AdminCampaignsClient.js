@@ -46,7 +46,13 @@ const CampaignRow = ({ campaign, onAction }) => {
                 position: "top-right", autoClose: 4000, theme: "dark", transition: Bounce,
             })
         } else {
-            toast.success(`Campaign ${action}d`, {
+            const ACTION_LABELS = {
+            approve: "Campaign approved",
+            reject:  "Campaign rejected",
+            suspend: "Campaign suspended",
+            restore: "Campaign restored",
+        }
+        toast.success(ACTION_LABELS[action] ?? `Campaign ${action}d`, {
                 position: "top-right", autoClose: 3000, theme: "dark", transition: Bounce,
             })
             setReason("")
